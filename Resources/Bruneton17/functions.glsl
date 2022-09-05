@@ -307,7 +307,7 @@ DimensionlessSpectrum ComputeTransmittanceToTopAtmosphereBoundary(
     IN(AtmosphereParameters) atmosphere, Length r, Number mu) {
   assert(r >= atmosphere.bottom_radius && r <= atmosphere.top_radius);
   assert(mu >= -1.0 && mu <= 1.0);
-  return exp(-(
+  return
       atmosphere.rayleigh_scattering *
           ComputeOpticalLengthToTopAtmosphereBoundary(
               atmosphere, atmosphere.rayleigh_density, r, mu) +
@@ -316,7 +316,7 @@ DimensionlessSpectrum ComputeTransmittanceToTopAtmosphereBoundary(
               atmosphere, atmosphere.mie_density, r, mu) +
       atmosphere.absorption_extinction *
           ComputeOpticalLengthToTopAtmosphereBoundary(
-              atmosphere, atmosphere.absorption_density, r, mu)));
+              atmosphere, atmosphere.absorption_density, r, mu);
 }
 
 /*
@@ -476,7 +476,15 @@ DimensionlessSpectrum GetTransmittanceToTopAtmosphereBoundary(
     Length r, Number mu) {
   assert(r >= atmosphere.bottom_radius && r <= atmosphere.top_radius);
   vec2 uv = GetTransmittanceTextureUvFromRMu(atmosphere, r, mu);
-  return DimensionlessSpectrum(texture(transmittance_texture, uv).rgb);
+  return exp(-DimensionlessSpectrum(texture(transmittance_texture, uv).rgb));
+}
+DimensionlessSpectrum GetMinusOpticalLengthToTopAtmosphereBoundary(
+    IN(AtmosphereParameters) atmosphere,
+    IN(TransmittanceTexture) transmittance_texture,
+    Length r, Number mu) {
+    assert(r >= atmosphere.bottom_radius && r <= atmosphere.top_radius);
+    vec2 uv = GetTransmittanceTextureUvFromRMu(atmosphere, r, mu);
+    return -DimensionlessSpectrum(texture(transmittance_texture, uv).rgb);
 }
 
 /*
@@ -503,17 +511,17 @@ DimensionlessSpectrum GetTransmittance(
 
   if (ray_r_mu_intersects_ground) {
     return min(
-        GetTransmittanceToTopAtmosphereBoundary(
-            atmosphere, transmittance_texture, r_d, -mu_d) /
-        GetTransmittanceToTopAtmosphereBoundary(
-            atmosphere, transmittance_texture, r, -mu),
+        exp(GetMinusOpticalLengthToTopAtmosphereBoundary(
+                atmosphere, transmittance_texture, r_d, -mu_d) -
+            GetMinusOpticalLengthToTopAtmosphereBoundary(
+                atmosphere, transmittance_texture, r, -mu)),
         DimensionlessSpectrum(1.0, 1.0, 1.0));
   } else {
     return min(
-        GetTransmittanceToTopAtmosphereBoundary(
-            atmosphere, transmittance_texture, r, mu) /
-        GetTransmittanceToTopAtmosphereBoundary(
-            atmosphere, transmittance_texture, r_d, mu_d),
+        exp(GetMinusOpticalLengthToTopAtmosphereBoundary(
+                atmosphere, transmittance_texture, r, mu) -
+            GetMinusOpticalLengthToTopAtmosphereBoundary(
+                atmosphere, transmittance_texture, r_d, mu_d)),
         DimensionlessSpectrum(1.0, 1.0, 1.0));
   }
 }
