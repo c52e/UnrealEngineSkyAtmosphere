@@ -712,21 +712,36 @@ void ComputeSingleScattering(
   // Integration loop.
   DimensionlessSpectrum rayleigh_sum = DimensionlessSpectrum(0.0, 0.0, 0.0);
   DimensionlessSpectrum mie_sum = DimensionlessSpectrum(0.0, 0.0, 0.0);
-  for (int i = 0; i <= SAMPLE_COUNT; ++i) {
-    Length d_i = Number(i) * dx;
+  DimensionlessSpectrum transmittance = float3(1.0, 1.0, 1.0);
+  for (int i = 0; i < SAMPLE_COUNT; ++i) {
+      Length d_i = (Number(i) + 0.5) * dx;
     // The Rayleigh and Mie single scattering at the current sample point.
     DimensionlessSpectrum rayleigh_i;
     DimensionlessSpectrum mie_i;
-    ComputeSingleScatteringIntegrand(atmosphere, transmittance_texture,
-        r, mu, mu_s, nu, d_i, ray_r_mu_intersects_ground, rayleigh_i, mie_i);
-    // Sample weight (from the trapezoidal rule).
-    Number weight_i = (i == 0 || i == SAMPLE_COUNT) ? 0.5 : 1.0;
-    rayleigh_sum += rayleigh_i * weight_i;
-    mie_sum += mie_i * weight_i;
+    
+    Length d = d_i;
+    Length r_d = ClampRadius(atmosphere, sqrt(d * d + 2.0 * r * mu * d + r * r));
+    Number mu_s_d = ClampCosine((r * mu_s + d * nu) / r_d);
+    DimensionlessSpectrum transmittance_to_sun =
+        GetTransmittanceToSun(
+            atmosphere, transmittance_texture, r_d, mu_s_d);
+    Number rayleigh_density_i = GetProfileDensity(atmosphere.rayleigh_density, r_d - atmosphere.bottom_radius);
+    Number mie_density_i = GetProfileDensity(atmosphere.mie_density, r_d - atmosphere.bottom_radius);
+    Number absorption_density_i = GetProfileDensity(atmosphere.absorption_density, r_d - atmosphere.bottom_radius);
+    ScatteringSpectrum extinction_i = rayleigh_density_i * atmosphere.rayleigh_scattering
+        + mie_density_i * atmosphere.mie_extinction
+        + absorption_density_i * atmosphere.absorption_extinction;
+    DimensionlessSpectrum transmittance_i = exp(-extinction_i * dx);
+    rayleigh_i = rayleigh_density_i * transmittance_to_sun * atmosphere.rayleigh_scattering;
+    mie_i = mie_density_i * transmittance_to_sun * atmosphere.mie_scattering;
+
+    rayleigh_sum += transmittance * (rayleigh_i - rayleigh_i * transmittance_i) / extinction_i;
+    mie_sum += transmittance * (mie_i - mie_i * transmittance_i) / extinction_i;
+    transmittance *= transmittance_i;
   }
-  rayleigh = rayleigh_sum * dx * atmosphere.solar_irradiance *
-      atmosphere.rayleigh_scattering;
-  mie = mie_sum * dx * atmosphere.solar_irradiance * atmosphere.mie_scattering;
+  // See slide 28 at https://www.frostbite.com/2015/08/physically-based-unified-volumetric-rendering-in-frostbite/
+  rayleigh = rayleigh_sum * atmosphere.solar_irradiance;
+  mie = mie_sum * atmosphere.solar_irradiance;
 }
 
 /*
@@ -1296,8 +1311,9 @@ RadianceSpectrum ComputeMultipleScattering(
   // Integration loop.
   RadianceSpectrum rayleigh_mie_sum =
       RadianceSpectrum(0.0 * watt_per_square_meter_per_sr_per_nm, 0.0 * watt_per_square_meter_per_sr_per_nm, 0.0 * watt_per_square_meter_per_sr_per_nm);
-  for (int i = 0; i <= SAMPLE_COUNT; ++i) {
-    Length d_i = Number(i) * dx;
+  DimensionlessSpectrum transmittance = float3(1.0, 1.0, 1.0);
+  for (int i = 0; i < SAMPLE_COUNT; ++i) {
+    Length d_i = (Number(i) + 0.5) * dx;
 
     // The r, mu and mu_s parameters at the current integration point (see the
     // single scattering section for a detailed explanation).
@@ -1306,18 +1322,22 @@ RadianceSpectrum ComputeMultipleScattering(
     Number mu_i = ClampCosine((r * mu + d_i) / r_i);
     Number mu_s_i = ClampCosine((r * mu_s + d_i * nu) / r_i);
 
+    Number rayleigh_density_i = GetProfileDensity(atmosphere.rayleigh_density, r_i - atmosphere.bottom_radius);
+    Number mie_density_i = GetProfileDensity(atmosphere.mie_density, r_i - atmosphere.bottom_radius);
+    Number absorption_density_i = GetProfileDensity(atmosphere.absorption_density, r_i - atmosphere.bottom_radius);
+    ScatteringSpectrum extinction_i = rayleigh_density_i * atmosphere.rayleigh_scattering
+        + mie_density_i * atmosphere.mie_extinction
+        + absorption_density_i * atmosphere.absorption_extinction;
+    DimensionlessSpectrum transmittance_i = exp(-extinction_i * dx);
+
     // The Rayleigh and Mie multiple scattering at the current sample point.
-    RadianceSpectrum rayleigh_mie_i =
+    RadianceDensitySpectrum rayleigh_mie_i =
         GetScattering(
             atmosphere, scattering_density_texture, r_i, mu_i, mu_s_i, nu,
-            ray_r_mu_intersects_ground) *
-        GetTransmittance(
-            atmosphere, transmittance_texture, r, mu, d_i,
-            ray_r_mu_intersects_ground) *
-        dx;
-    // Sample weight (from the trapezoidal rule).
-    Number weight_i = (i == 0 || i == SAMPLE_COUNT) ? 0.5 : 1.0;
-    rayleigh_mie_sum += rayleigh_mie_i * weight_i;
+            ray_r_mu_intersects_ground);
+    // See slide 28 at https://www.frostbite.com/2015/08/physically-based-unified-volumetric-rendering-in-frostbite/
+    rayleigh_mie_sum += transmittance * (rayleigh_mie_i - rayleigh_mie_i * transmittance_i) / extinction_i;
+    transmittance *= transmittance_i;
   }
   return rayleigh_mie_sum;
 }
