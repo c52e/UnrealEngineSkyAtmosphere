@@ -712,7 +712,7 @@ void ComputeSingleScattering(
   assert(nu >= -1.0 && nu <= 1.0);
 
   // Number of intervals for the numerical integration.
-  const int SAMPLE_COUNT = 50;
+  const int SAMPLE_COUNT = 150;
   // The integration step, i.e. the length of each integration interval.
   Length dx =
       DistanceToNearestAtmosphereBoundary(atmosphere, r, mu,
@@ -1310,7 +1310,7 @@ RadianceSpectrum ComputeMultipleScattering(
   assert(nu >= -1.0 && nu <= 1.0);
 
   // Number of intervals for the numerical integration.
-  const int SAMPLE_COUNT = 50;
+  const int SAMPLE_COUNT = 150;
   // The integration step, i.e. the length of each integration interval.
   Length dx =
       DistanceToNearestAtmosphereBoundary(
