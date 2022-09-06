@@ -26,6 +26,16 @@ Single scattering
 
 ![scattering9](data/scattering9.png)
 
-Use multiscattering LUT
+Use multiple scattering LUT
 
 ![multiscatteringlut](data/multiscatteringlut.png)
+
+With multiple scattering LUT, physically based overcast sky can be simulated by adding an additional dense mie scattering layer at altitudes of clouds.
+
+With additional dense mie scattering layer
+
+![overcast](data/overcast.png)
+
+Without additional dense mie scattering layer
+
+![clear](data/clear.png)
